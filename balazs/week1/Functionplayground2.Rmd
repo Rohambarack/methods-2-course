@@ -1,0 +1,277 @@
+---
+title: "Custom_Functions"
+author: "Balazs"
+date: "10/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, include = TRUE, message = FALSE, warning = FALSE, root.dir = '.')
+library(tidyverse)
+library(car)
+```
+  
+# Intro  
+Hi guys, I thought these two functions might be useful to you too  
+The "is_this_normal" will take a dataset and tell you if it is distributed normally.  
+The "quick_hist" will take a dataset and make a histogram about it. This only has Tidyverse elements, so it works with %>% 
+
+
+```{r}
+is_this_normal<- function(dataframe, var1, binwidth = 30){
+  ## a function, which combine "is_this_normal" and "quick_hist"
+ 
+   ## a function that helps decide if a data set is normally distributed  
+  library(pastecs)
+  library(tidyverse)
+  
+## very important step!!!!! -- > this makes it work with pipes
+ DF1 <- dataframe %>% 
+   mutate(var1_1 = {{var1}} ) %>% 
+   select(var1_1)
+ 
+##  A vector with the important numeric data
+Table1 <- stat.desc(DF1$var1_1, basic = FALSE, norm = TRUE) 
+
+## Printing out results
+  
+  if ((Table1[c("skew.2SE")]<1) & (Table1[c("kurt.2SE")]<1) & (Table1[c("normtest.p")]>0.05)) 
+    {
+    print("Null hypothesis wasn't disproved, kurtosis ans skewness are acceptable")
+  } else 
+    {
+    print("Not normally distributed")
+    }
+  print(Table1[c("skewness","kurtosis","skew.2SE","kurt.2SE","normtest.p")])
+ 
+ 
+## a function to get a quick histogram of a data set, along with the mean, SD and number of samples (Also works with %>% )
+ 
+ #name of the plot
+ STRNamevar <- deparse(substitute(var1))
+
+## a Quick summary of the mean, Standard deviation and sample size, not that formative, but might be enough in some cases
+DF2 <- DF1 %>% 
+  select(var1_1) %>% 
+  summarize( Mean=mean(var1_1), StandardDeviation=sd(var1_1), NumberOfSamples=n() )
+
+
+## A histogram showing the data with the mean as a dotted line
+Plot1 <- DF1 %>% 
+  ggplot(aes(x = var1_1))+
+  geom_histogram(aes(y=..density..),color="Black", fill= "Red", alpha=0.5, binwidth = binwidth) +
+  geom_vline(data=DF1, aes(xintercept=mean(var1_1)),
+             linetype="dashed") +
+  stat_function(fun = dnorm,
+                args = list(mean = mean(DF1$var1_1, na.rm = TRUE),
+                sd = sd(DF1$var1_1, na.rm = TRUE)),
+                colour= "black", size = 1) +
+labs(x=STRNamevar)
+
+## QQ plot 
+Plot2 <- DF1 %>% 
+  ggplot(aes(sample = var1_1))+
+stat_qq() +
+  stat_qq_line() +
+  ggtitle(STRNamevar)
+
+  
+## Printing out results
+  print(DF2)
+  print(Plot1)
+  print(Plot2)
+ 
+}
+
+```
+
+```{r}
+
+no_outliers <- function(dataframe,var1){
+  
+## A function for removing outliers from the data
+  library(tidyverse)
+  
+  ## very important step!!!!! -- > this makes it work with pipes
+ DF1 <- dataframe %>% 
+   mutate(var1_1 = {{var1}} ) %>% 
+   select(var1_1)
+ 
+  ## defining quantiles
+  Q <- quantile(DF1$var1_1, probs=c(.25, .75), na.rm = FALSE)
+  iqr <- iqr <- IQR(DF1$var1_1)
+  ## explanation to what an upper and lower range is
+  up <-  Q[2]+1.5*iqr # Upper Range  
+  low <- Q[1]-1.5*iqr # Lower Range
+  
+  ##new dataframe without ouliers
+  without_outliers<- subset(DF1, var1_1 > (Q[1] - 1.5*iqr) & var1_1 < (Q[2]+1.5*iqr))
+  
+ ##making it pipe  output compatible
+   STRNamevar <- c(deparse(substitute( var1 )))
+   DFOut <- without_outliers %>% 
+   mutate( !!STRNamevar[1] := var1_1 ) %>% 
+     select(!var1_1)
+  
+  
+   
+  # rename(without_outliers, STRNamevar = var1_1)
+   return(DFOut)
+   
+}
+
+```
+
+
+# In Action:  
+I got a dataset with all the Pokemon data and tried to find something with a normal distribution
+```{r}
+DF1_all_data <- read_csv("pokemonsdataset.csv")
+```
+
+
+```{r}
+trans_to_norm_log<- function(dataframe, var1){
+  #positive skew logarithmic transformations function for non normally distributed data
+  
+  ## very important step!!!!! -- > this makes it work with pipes
+ DF1 <- dataframe %>% 
+   mutate(var1_1 = {{var1}} ) %>% 
+   select(var1_1)
+
+  #transforming
+DFTrans <- DF1 %>% 
+  mutate(logvar1 = log( var1_1 ))  %>% 
+  select(logvar1)
+ 
+
+##making it pipe  output compatible
+   STRNamevar <- c(deparse(substitute( var1 )))
+   DFOut <- DFTrans %>% 
+   mutate( !!STRNamevar[1] := logvar1 ) %>% 
+     select(!logvar1)
+
+return(DFOut)
+   
+}
+```
+
+```{r}
+trans_to_norm_sqrt <- function(dataframe, var1){
+  
+  #positive skew squared transformations function for non normally distributed data
+  
+  ## very important step!!!!! -- > this makes it work with pipes
+ DF1 <- dataframe %>% 
+   mutate(var1_1 = {{var1}} ) %>% 
+   select(var1_1)
+
+  #transforming
+DFTrans <- DF1 %>% 
+  mutate(sqrtvar1 = sqrt( var1_1 ))  %>% 
+  select(sqrtvar1)
+ 
+
+##making it pipe  output compatible
+   STRNamevar <- c(deparse(substitute( var1 )))
+   DFOut <- DFTrans %>% 
+   mutate( !!STRNamevar[1] := sqrtvar1 ) %>% 
+     select(!sqrtvar1)
+
+return(DFOut)
+  
+}
+
+```
+
+```{r}
+trans_to_norm_recip <- function(dataframe, var1){
+  
+  #positive skew squared transformations function for non normally distributed data
+  
+  ## very important step!!!!! -- > this makes it work with pipes
+ DF1 <- dataframe %>% 
+   mutate(var1_1 = {{var1}} ) %>% 
+   select(var1_1)
+
+  #transforming
+DFTrans <- DF1 %>% 
+  mutate(recipvar1 = 1/ var1_1 )  %>% 
+  select(recipvar1)
+ 
+
+##making it pipe  output compatible
+   STRNamevar <- c(deparse(substitute( var1 )))
+   DFOut <- DFTrans %>% 
+   mutate( !!STRNamevar[1] := recipvar1 ) %>% 
+     select(!recipvar1)
+
+return(DFOut)
+  
+}
+```
+
+
+```{r}
+DFNorm <- DF1_all_data %>% 
+  filter(`Primary Type`=="FIRE")
+
+DFNorm %>% 
+  is_this_normal(HP,1)
+```
+
+```{r}
+
+ DFNorm1 <- DFNorm %>% 
+  mutate(Secondary_type = is.na(`Secondary type`)) %>% 
+  select(!`Secondary type`)
+
+```
+
+
+```{r}
+leveneTest(DFNorm1$HP,DFNorm1$Secondary_type)
+leveneTest(DFNorm1$Attack,DFNorm1$Secondary_type)
+```
+
+```{r}
+Fibonacci <- function(length = 1){
+  
+  if (length > 0) {
+
+x1 <- 1
+x2 <- 0
+
+results <- c(x1)
+
+while ((length-1) !=0) {
+
+
+
+nextterm <- x1+ x2
+
+results <- append(results, nextterm)
+
+x2 <- x1
+x1 <- nextterm
+
+length <- length-1
+
+}
+  } else {
+    results <- "Enter a value higher than 0"
+    
+  }
+  
+  return(results)
+}
+
+```
+
+```{r}
+Fibonacci15 <- Fibonacci(15) %>% 
+  print
+
+
+```
+
