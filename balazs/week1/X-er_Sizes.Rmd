@@ -1,0 +1,628 @@
+---
+title: "X-er_Sizes"
+author: "Balazs Szabo"
+date: "2/2/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, include = TRUE, message = FALSE, warning = FALSE, root.dir = '.')
+```
+# Libraries
+```{r}
+library(tidyverse)
+library(truncnorm)
+library(car)
+library(MASS)
+library(lmtest)
+library(WRS2)
+library(patchwork)
+library(lmerTest)
+library(MuMIn)
+library(janitor)
+library(readr)
+```
+
+
+# Custom functions I'll use
+```{r}
+is_this_normal<- function(dataframe, var1, binwidth = 30){
+  
+  library(pastecs)
+  library(tidyverse)
+  
+ DF1 <- dataframe %>% 
+   mutate(var1_1 = {{var1}} ) %>% 
+   dplyr::select(var1_1)
+ 
+
+Table1 <- stat.desc(DF1$var1_1, basic = FALSE, norm = TRUE) 
+
+  
+  if ((Table1[c("skew.2SE")]<1) & (Table1[c("kurt.2SE")]<1) & (Table1[c("normtest.p")]>0.05)) 
+    {
+    print("Null hypothesis can't be rejected, kurtosis and skewness are acceptable")
+  } else 
+    {
+    print("Not normally distributed")
+    }
+  print(Table1[c("skewness","kurtosis","skew.2SE","kurt.2SE","normtest.p")])
+ 
+ STRNamevar <- deparse(substitute(var1))
+
+DF2 <- DF1 %>% 
+  dplyr::select(var1_1) %>% 
+  summarize( Mean=mean(var1_1), StandardDeviation=sd(var1_1), NumberOfSamples=n() )
+
+Plot1 <- DF1 %>% 
+  ggplot(aes(x = var1_1))+
+  geom_histogram(aes(y=..density..),color="Black", fill= "Red", alpha=0.5, binwidth = binwidth) +
+  geom_vline(data=DF1, aes(xintercept=mean(var1_1)),
+             linetype="dashed") +
+  stat_function(fun = dnorm,
+                args = list(mean = mean(DF1$var1_1, na.rm = TRUE),
+                sd = sd(DF1$var1_1, na.rm = TRUE)),
+                colour= "black", size = 1) +
+xlab(STRNamevar)
+
+Plot2 <- DF1 %>% 
+  ggplot(aes(sample = var1_1))+
+stat_qq() +
+  stat_qq_line() +
+  xlab(STRNamevar)
+
+  print(DF2)
+  
+  Plot1 + Plot2
+ 
+}
+```
+
+```{r}
+is_there_correlation <- function(dataframe, var1, var2, method){
+  
+STRNamevar1 <- deparse(substitute(var1))
+STRNamevar2 <- deparse(substitute(var2))
+  
+ DF1 <- dataframe %>% 
+   mutate(var1_1 = {{var1}} ) %>%
+   mutate(var2_1 = {{var2}} ) %>%
+   dplyr::select(var1_1,var2_1)
+  
+print(cor.test(DF1$var1_1, DF1$var2_1, method = method ))
+
+Plot1 <- DF1 %>% 
+ggplot(aes(x=var1_1, y=var2_1)) + 
+geom_point()+
+geom_smooth(method=lm, se=FALSE) +
+  xlab(STRNamevar1) +
+  ylab(STRNamevar2)
+
+print(Plot1)
+
+}
+```
+
+```{r}
+t_test_it_independent <- function(dataframe,var1,group,type= "nonnormal"){
+  library(tidyverse)
+  library(WRS2)
+  
+  DF1 <- dataframe %>% 
+   mutate(var1_1 = {{var1}} )%>%
+   mutate(group_1 = {{group}} ) %>% 
+   dplyr::select(var1_1,group_1)
+  
+  STRNamevar <- deparse(substitute(var1))
+  STRNamegroup <- deparse(substitute(group))
+
+  if(type == "welch"){
+    
+    welch0 <- DF1 %>% 
+      group_by(group_1) %>% 
+      group_split()
+    welch1 <- welch0[[1]]
+    welch2 <- welch0[[2]]
+    
+    print(t.test(welch1$var1_1, welch2$var1_1))
+  } else if(type == "nonnormal"){
+       print(WRS2::yuen(var1_1 ~ group_1, data = DF1))
+  } else if ( type =="normal"){
+    
+      normal0 <- DF1 %>% 
+      group_by(group_1) %>% 
+      group_split()
+    normal1 <- normal0[[1]]
+    normal2 <- normal0[[2]]
+    
+    print(t.test(normal1$var1_1, normal2$var1_1, var.equal = TRUE))
+  } else {
+      print("Please enter the type of the t-test. It can be normal: for normally distributed, homoscedastic data; welch: if the equality of variance is violated; nonnormal: if the assumptions of normality is violated ")
+    }
+  
+ 
+  DF2_help <- DF1 %>% 
+  group_by(group_1) %>% 
+  summarise(Mean = mean(var1_1), StandardDeviation=sd(var1_1), NumberOfSamples=n()) %>% 
+  print()
+
+ DF3_Help <- DF1 %>%
+  group_by(group_1) %>%
+  summarise(var1_1 = mean(var1_1))
+
+ Plot1 <- DF1 %>% 
+  ggplot(aes(x=group_1,y=var1_1, color=group_1)) + 
+geom_point() +
+  geom_bar(data = DF3_Help, stat = "identity", alpha = .3)+
+   xlab(STRNamegroup) +
+   ylab(STRNamevar) +
+   guides(color=guide_legend(title=STRNamegroup))
+ 
+ Plot2 <- DF1 %>% 
+  ggplot(aes(x=as_factor(group_1),y=var1_1, color=as_factor(group_1))) + 
+geom_boxplot() +
+   xlab(STRNamegroup) +
+   ylab(STRNamevar) +
+   guides(color=guide_legend(title=STRNamegroup))
+ 
+   
+   print(Plot2)
+  
+}
+```
+
+# Excersize 1.2  
+Help used: 
+https://www.learnbymarketing.com/tutorials/explaining-the-lm-summary-in-r/
+https://towardsdatascience.com/generate-simulated-dataset-for-linear-model-in-r-469a5e2f4c2e
+
+##A,  
+Sketch hypothetical data with the same range of x but corresponding to the line y = 30 + 10x
+with residual standard deviation 3.9.
+
+```{r}
+#setting seed to retain data
+set.seed(1666)
+#generating a normal distribution with values in the range of 0-4
+normirand <- rtruncnorm(n = 100,a = 0,b = 4,mean = 2,sd = 3.9)
+#generating error. The standard deviation was adjusted manually in a trial and error fashion after the model was made, so the residual standard deviation becomes 3.9
+error <- rnorm(100,0,4.5644)
+
+#creating residuals
+y <- 30 + (10*normirand)+ error
+
+m1 = lm(y~normirand)
+summary(m1)
+plot(m1
+     )
+
+```
+```{r}
+
+#Checking Residual Standard Deviation
+k=length(m1$coefficients)-1 #Subtract one to ignore intercept
+SSE=sum(m1$residuals**2)
+n=length(m1$residuals)
+sqrt(SSE/(n-1)) #Residual Standard deviation
+```
+
+
+##B,  
+Sketch hypothetical data with the same range of x but corresponding to the line y = 30 + 10x
+with residual standard deviation 10.
+```{r}
+#setting seed to retain data
+set.seed(1666)
+#generating a normal distribution with values in the range of 0-4
+normirand2 <- rtruncnorm(n = 100,a = 0,b = 4,mean = 2,sd = 10)
+#generating error. The standard deviation was adjusted manually in a trial and error fashion after the model was made, so the residual standard deviation becomes 3.9
+error2 <- rnorm(100,0,12.10694)
+
+#creating residuals
+y2 <- 30 + (10*normirand2)+ error2
+
+m2 = lm(y2~normirand2)
+summary(m2)
+plot(m2
+     )
+
+
+```
+
+```{r}
+
+#Checking Residual Standard Deviation
+k2=length(m2$coefficients)-1 #Subtract one to ignore intercept
+SSE2=sum(m2$residuals**2)
+n2=length(m2$residuals)
+sqrt(SSE2/(n2-1)) #Residual Standard deviation
+```
+```{r}
+#visualization
+
+df_ex1 <- data.frame (normirand,y,normirand2,y2)
+
+df_ex1 %>% 
+ggplot(aes(x=normirand, y=y))+
+  geom_point()+
+  stat_smooth(method = lm, col="red")+
+  ggtitle("Exercise1.2 A)")
+
+
+df_ex1 %>% 
+ggplot(aes(x=normirand2, y=y2))+
+  geom_point()+
+  stat_smooth(method = lm, col="blue")+
+  ggtitle("Exercise1.2 B)")
+```
+
+
+# Exercise on Selected Dataset  
+## 1,  
+Use a descriptive statistics and visual investigation to give a preliminary look into the data. ( Chapter 2 things ) 
+
+### Loading an manipulating data
+```{r}
+# I used a horse survival dataset, but altered it a bit so the exercises can be made on it.
+# selected only hospital_number, surgery (binary), age(categorical(binary)) abdominal_distention (categorical), pain (categorical), rectal_temp (continuous), pulse(continuous), outcome(categorical(binary)), packed_cell_volume (continuous)
+# removed some digits from hospital number to simulate mixed effects
+# changed outcome and age to binary
+# removed rows with NA values
+# 
+
+DF1_Horse <- read_csv("horse.csv") %>% 
+  dplyr::select(hospital_number,surgery, age, pain, abdominal_distention, rectal_temp, pulse, outcome, packed_cell_volume) %>% 
+    na.omit() %>% 
+  mutate(age = case_when(age == "adult" ~ 1,
+                         age == "young" ~ 0),
+         ) %>% 
+  mutate(age = as_factor(age)) %>% 
+  
+  mutate(surgery = case_when(surgery == "yes" ~ 1,
+                         surgery == "no" ~ 0),
+         ) %>% 
+  mutate(surgery = as_factor(surgery))  %>% 
+  
+  mutate(outcome = case_when(outcome == "lived" ~ 1,
+                         outcome == "died" ~ 0,
+                         outcome == "euthanized" ~ 0),
+         ) %>% 
+  mutate(outcome = as_factor(outcome))
+  
+  DF2_MixedHorse <- DF1_Horse %>% 
+  mutate(hospital_number = substr(hospital_number,1,nchar(hospital_number)-3)) %>% 
+  mutate(hospital_number = as.numeric(hospital_number))
+
+  
+
+```
+### Some Descriptive statistics and plots:
+
+#### descriptive things 1,
+First I'm interested in whether there is a correlation between rectal temperature and packed cell volume. Since increased temperature is a sign of fever and fever causes dehydration and dehydration could cause decreased cell volume, there might be.
+
+Assumption testing:
+
+```{r}
+DF1_Horse %>% 
+  is_this_normal(pulse,5)
+
+```
+```{r}
+DF1_Horse %>% 
+  is_this_normal(packed_cell_volume,5)
+
+```
+None of these are normally distributed so I'll use Spearman's rank correlation coefficient. 
+```{r}
+DF1_Horse %>% 
+  is_there_correlation(rectal_temp, packed_cell_volume, "spearman")
+
+```
+
+The correlation test for rectal temperature and packed cell volume shows a weak positive correlation (p-value = 0.02921, rho = 0.1682959) 
+
+#### descriptive things 2,
+Next I am interested in whether there is a connection between pulse and horse survival.
+
+- Barplot - died/lived pulse + t test
+```{r}
+#Separating dead and living horses
+DF3_Pulse1 <- DF1_Horse %>% 
+  filter(outcome == 1)
+
+DF4_Pulse0 <- DF1_Horse %>% 
+  filter(outcome == 0)
+
+```
+
+Assumption testing:
+
+```{r}
+DF3_Pulse1 %>% 
+  is_this_normal(pulse,5)
+
+```
+```{r}
+DF4_Pulse0 %>% 
+  is_this_normal(pulse,5)
+```
+```{r}
+DF1_Horse %>% 
+   t_test_it_independent(pulse, outcome)
+
+```
+
+Since not all of the data were normally distributed, Yuen's test for trimmed means was used. On average, horses that died had a higher pulse before.(M=87.51667, SD=29.99067) compared to horses that lived(M=60.71296, SD=22.01828), t-test: 8.4935 (df = 60.59), p-value < 0.05.
+
+## 2,  
+Create several models and discuss what each model reliably can infer anything about:
+### Mixed effect, which random effects?
+
+I made a "mock" dataset, where the same horses are in multiple data points so I can use a mixed effect model. I know this far from ideal, because these were different horses in the original dataset, and have different values. I'll try to make a model to predict pulse by rectal temperature.
+```{r}
+
+mixed_horse <- lmer(pulse ~ rectal_temp + ( 1 | hospital_number), data=DF2_MixedHorse)
+summary(mixed_horse)
+plot(mixed_horse)
+```
+Even tho this dataset was a spawn of hell called forth to existence only by my ineptitude, and should never be mentioned again, The pulse of the horse were significantly modulated by rectal temperature, so higher temperatures mean higher pulse (β=5.278, SE=2.541, t =2.077, p<.05) 
+
+### Logistic regression?  
+
+A logistic regression can show which predictors influence the horses' survival.
+```{r}
+#checking coliniarity
+DF5_colcheck <- DF1_Horse %>% 
+  dplyr::select(rectal_temp, pulse, packed_cell_volume)
+
+round(cor(DF5_colcheck),2)
+```
+
+
+```{r}
+
+ loghorse <- glm(outcome ~ pulse + pain, DF1_Horse, family = binomial)
+summary(loghorse)
+```
+```{r}
+round(boot::inv.logit(4.129547+(-0.036608*80)-3.126316)*100,digits=2)
+
+```
+So a horse with a pulse of 80, which is in severe pain has a 12.73% chance to survive according to the model.
+
+
+### Should we dummy code?  
+https://methods.sagepub.com/reference/encyc-of-research-design/n123.xml#:~:text=Dummy%20codes%20are%20a%20series,%3D%20male%2C%200%20%3D%20female.  
+
+I used dummy codes. I did not have an unshakable reason for that, maybe I just like 0s and 1s better than text.
+
+## 3, 
+Do model comparison
+
+I will try to find the best model for predicting pulse
+
+```{r}
+
+model1 <- lm(pulse ~  pain + age + packed_cell_volume, DF1_Horse)
+model2 <- lm(pulse ~  pain + abdominal_distention + packed_cell_volume, DF1_Horse)
+model3 <- lm(pulse ~  pain + age + abdominal_distention, DF1_Horse)
+summary(model1)
+summary(model2)
+summary(model3)
+
+```
+```{r}
+AIC(model1)
+AIC(model2)
+AIC(model3)
+```
+Model 1 has the highest adjusted r squared value, the lowest AIC and the most statistically significant predictors
+
+## 4,  
+Test the (best) model's prediction capability
+
+```{r}
+#assigning IDs
+DF1_Horse$ID <- seq.int(nrow(DF1_Horse))
+
+#splitting the dataset
+DF6_predtrain <- DF1_Horse %>% 
+  dplyr::filter(ID < 80)
+
+DF7_predtest <- DF1_Horse %>% 
+  dplyr::filter(ID > 80)
+
+#training
+
+modelT <- lm(pulse ~  pain + age + packed_cell_volume, DF6_predtrain)
+  
+#predicting
+predicted_probs_test = predict(modelT, DF7_predtest, type = 'response')
+
+#actual
+actual_categories_test = DF7_predtest$pulse
+
+#tibbling
+
+
+pred1 <- as.data.frame(predicted_probs_test)
+pred2 <- as.data.frame(actual_categories_test)
+
+pred1 <- pred1 %>%
+  mutate(numbers = predicted_probs_test) %>% 
+  mutate(Category = ifelse(numbers > 0,"pred",)) %>% 
+  dplyr::select(numbers,Category)
+
+pred2 <- pred2 %>%
+  mutate(numbers = actual_categories_test) %>% 
+  mutate(Category = ifelse(numbers > 0,"act",)) %>% 
+  dplyr::select(numbers,Category)
+
+pred_df_test <- rbind(pred1,pred2)
+
+```
+
+```{r}
+#checking similarity
+
+pred_df_test %>% 
+  t_test_it_independent(numbers, Category,)
+```
+The t test finds no siginifcant difference between the means of the predicted and the actual values, so I would argue that prediction is not horrible, but there is some difference in standard deviation.
+
+## 5,  
+Write up a short summary of the model
+
+```{r}
+summary(model1)
+```
+Multiple linear regression was used to test if pain level observed on a horse, its age category, and the horses packed cell volume significantly predicted the animals pulse.
+
+The fitted regression model was: pulse ~ pain + age + packed_cell_volume
+
+The overall regression was statistically significant (R2 = 0.6039, F(6, 161) = 43.44, p < 0.05).
+
+It was found that observed pain significantly predicted pulse. Depressed pain level (β = 21.192 ,  p < 0.05), extreme pain level (β = 18.677 , p < 0.05), mild pain level (β = 10.477 ,  p < 0.05) and seveere pain level (β =15.401 , p < 0.05) all were statistically significant.
+
+It was found that being an adult horse could also significantly predict pulse (β = -66.397, p < 0.05).
+It was found that packed cell volume could also significantly predict pulse (β = 1.060, p < 0.05).
+
+## Exercise 2.3
+
+```{r}
+
+
+DF8_names <- read_csv("https://raw.githubusercontent.com/Rohambarack/ROS-Examples/master/Names/data/allnames_clean.csv")
+
+```
+
+```{r}
+DF9_girlnames <- DF8_names %>% 
+  filter(sex=="F")
+
+#stri_sub(colnames(DF10_girlnames2),1,1)=="X"
+```
+
+```{r}
+library(stringi)
+
+DF10_girlnames2 <- DF9_girlnames %>% 
+  mutate(name = stri_sub(name,-1,-1)) %>% 
+  group_by(name) %>% 
+  summarise_at(vars(X1880:X2010), sum, na.rm = TRUE) %>% 
+ mutate(across(X1880:X2010, ~ round(.x/sum(.x),4))*100)
+  
+```
+
+
+```{r}
+#this is me struggling to reformat the dataframe, and failing miserably but I decided not to delete it, because it might be useful for another project later on
+
+#fazs <- DF10_girlnames2 %>% 
+ # dplyr::filter(name=="a")
+
+#fazs <- fazs %>% 
+ # rownames_to_column() %>% 
+  #gather(variable, value, -rowname) %>% 
+  #spread(rowname, value) 
+
+#fazs$ID <- seq.int(nrow(fazs))
+
+#fazs <- fazs %>% 
+ # filter(ID > 1) %>% 
+  #mutate(name = "a") %>% 
+  #mutate(variable = str_sub(variable,2,)) %>% 
+  #mutate(variable = as.numeric(variable)) %>% 
+ #mutate(percent = `1`) %>% 
+  #mutate(percent= as.numeric(percent)) %>% 
+  #dplyr::select(!ID & !`1`)
+
+
+
+#fazs2 <- DF10_girlnames2 %>% 
+ # dplyr::filter(name=="b")
+
+#fazs2 <- fazs2 %>% 
+ # rownames_to_column() %>% 
+  #gather(variable, value, -rowname) %>% 
+  #spread(rowname, value) 
+
+#fazs2$ID <- seq.int(nrow(fazs2))
+
+#fazs2 <- fazs2 %>% 
+ # filter(ID > 1) %>% 
+  #mutate(name = "b") %>% 
+  #mutate(variable = str_sub(variable,2,)) %>% 
+  #mutate(variable = as.numeric(variable)) %>% 
+  #mutate(percent = `1`) %>% 
+  #mutate(percent= as.numeric(percent)) %>% 
+  #dplyr::select(!ID & !`1`)
+
+#fazska <- rbind(fazs,fazs2)
+
+```
+
+```{r}
+#trial 2 
+
+trial2 <- DF10_girlnames2 %>% 
+  rownames_to_column() %>% 
+  gather(variable, value, -rowname) %>% 
+  spread(rowname, value) %>% 
+   row_to_names(row_number = 1) %>% 
+  mutate(name = str_sub(name,2,)) %>% 
+  mutate(name = as.numeric(name)) %>% 
+   mutate(across(a:i, ~ as.numeric(.x)))
+```
+
+```{r}
+
+trial2 %>% 
+  ggplot(aes(x = name))+
+  #getting all 26 lines for the 26 letters
+  geom_line(aes( y = a),linetype = "solid") +
+  geom_line(aes( y = b)) +
+  geom_line(aes( y = c)) +
+  geom_line(aes( y = d)) +
+  geom_line(aes( y = e),linetype = "dashed") +
+  geom_line(aes( y = f)) +
+  geom_line(aes( y = g)) +
+  geom_line(aes( y = h)) +
+  geom_line(aes( y = i)) +
+  geom_line(aes( y = j)) +
+  geom_line(aes( y = k)) +
+  geom_line(aes( y = l)) +
+  geom_line(aes( y = m)) +
+  geom_line(aes( y = n)) +
+  geom_line(aes( y = o)) +
+  geom_line(aes( y = p)) +
+  geom_line(aes( y = q)) +
+  geom_line(aes( y = r)) +
+  geom_line(aes( y = s)) +
+  geom_line(aes( y = t)) +
+  geom_line(aes( y = u)) +
+  geom_line(aes( y = v)) +
+  geom_line(aes( y = w)) +
+  geom_line(aes( y = x)) +
+  geom_line(aes( y = y),linetype = "dotted") +
+  geom_line(aes( y = z)) +
+  #limiting ti 0-40%
+  ylim(0,40)+
+  #naming axes
+  ylab("Percentage of all girls' names that year") +
+  xlab("")+
+  #getting the % signs and the x axis breaks up
+  scale_x_continuous(breaks=seq(1900, 2000, 50)) +
+  scale_y_continuous(labels = function(x) paste0(x*1, "%"),breaks=seq(0,40, 20))+
+  #putting in the letters
+  geom_text(x=as.numeric("2000"),y = 40, label = "A") +
+  geom_text(x=as.numeric("1935"),y = 21, label = "Y") +
+  geom_text(x=as.numeric("1920"),y = 32, label = "E") 
+
+ggsave("trial2.png")
+
+  
+ 
+```
+

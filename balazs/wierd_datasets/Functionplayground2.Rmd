@@ -267,7 +267,30 @@ length <- length-1
 }
 
 ```
+```{r}
+is_there_correlation <- function(dataframe, var1, var2, method){
+  
+STRNamevar1 <- deparse(substitute(var1))
+STRNamevar2 <- deparse(substitute(var2))
+  
+ DF1 <- dataframe %>% 
+   mutate(var1_1 = {{var1}} ) %>%
+   mutate(var2_1 = {{var2}} ) %>%
+   select(var1_1,var2_1)
+  
+print(cor.test(DF1$var1_1, DF1$var2_1, method = method ))
 
+Plot1 <- DF1 %>% 
+ggplot(aes(x=var1_1, y=var2_1)) + 
+geom_point()+
+geom_smooth(method=lm, se=FALSE) +
+  xlab(STRNamevar1) +
+  ylab(STRNamevar2)
+
+print(Plot1)
+
+}
+```
 ```{r}
 Fibonacci15 <- Fibonacci(15) %>% 
   print
