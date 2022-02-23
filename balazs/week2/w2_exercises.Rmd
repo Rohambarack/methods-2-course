@@ -1,0 +1,240 @@
+---
+title: "w2 exercises"
+author: "Balazs Szabo"
+date: "2/9/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, include = TRUE, message = FALSE, warning = FALSE, root.dir = '.')
+```
+# Libraries
+```{r}
+library(tidyverse)
+
+```
+#3.1
+higher taxes are supported by 50% of respondents
+aged 18–29, 60% of respondents aged 30–44, 40% of respondents aged 45–64, and 30% of
+respondents aged 65 and up.
+
+200 respondents aged 18–29, 250 aged 30–44, 300 aged 45–64,
+and 250 aged 65+.
+```{r}
+age1 <- 200
+age2 <- 250
+age3 <- 300
+age4 <- 250
+
+(0.5*age1+0.6*age2+0.4*age3+0.3*age4)/(age1+age2+age3+age4)
+
+```
+44.5% supports higher taxes
+
+#3.3 
+```{r}
+set.seed(1666)
+
+norm1 <- rnorm(100,5,2)
+norm2 <- rnorm(100,10,10)
+norm3 <- rnorm(100,5,10)
+
+Df_1 <- data.frame(norm1) 
+Df_1 <- Df_1 %>% 
+  mutate(name = "norm1") %>% 
+  mutate(value = norm1) %>% 
+  dplyr::select(!norm1)
+
+Df_2 <- data.frame(norm2)
+Df_2 <- Df_2 %>% 
+  mutate(name = "norm2") %>% 
+  mutate(value = norm2) %>% 
+  dplyr::select(!norm2)
+
+Df_3 <- data.frame(norm3)
+Df_3 <- Df_3 %>% 
+  mutate(name = "norm3") %>% 
+  mutate(value = norm3) %>% 
+  dplyr::select(!norm3)
+
+Df_4 <- rbind(Df_1,Df_2,Df_3)
+
+Df_4 %>% 
+  ggplot(aes(x=value, fill=name)) +
+  geom_density(alpha=0.5)
+```
+#3.4
+```{r}
+set.seed(1666)
+
+df_poison <- data.frame(rpois(20, 3.5))
+
+df_poison <- df_poison %>% 
+  mutate(asd=rpois.20..3.5.)
+
+df_poison %>% 
+  ggplot(aes(x=asd)) +
+  geom_bar()
+```
+#3.5
+```{r}
+df_bin <- data.frame(rbinom(20,20,0.3))
+df_bin %>% 
+  ggplot(aes(x=rbinom.20..20..0.3.)) +
+  geom_bar()
+
+```
+#3.6
+##A
+```{r}
+#figuring out how to solve this one case
+set.seed(1666)
+library(truncnorm)
+test<- rtruncnorm(n = 100,a = 0,b = 50,mean = 35,sd = 10)
+
+testmean <- vector(mode="numeric", length=length(test))
+testmean[1:length(testmean)] <- mean(test)
+
+mean(36.56+1.793*test)
+sd(36.56+1.789*test)
+
+mean(test)
+sd(test)
+
+newssd <- 15/(sqrt((sum((test-testmean)^2)/(length(test)))))
+
+100-mean(newssd*test)
+
+```
+```{r}
+#writing a function to solve most? cases
+linear_transform_it <- function(dist, newsd, newmean){
+  #makes a vector with the same length of the original one but empty
+  distmean <- vector(mode="numeric", length=length(dist))
+  #fills that empty vector with the mean value
+  distmean[1:length(distmean)] <- mean(dist)
+  # this part uses the standard deviation * X = new standard deviation
+  # formula to solve for X
+  multby_sd <- newsd/(sqrt((sum((dist-distmean)^2)/(length(dist)))))
+  #this part multiplies the original vector by X,and subtracts it from the new_mean to
+  # figure out which number should be added to the linear transformation
+  add_to_mean <- newmean-mean(multby_sd*test)
+  
+  
+  
+  sprintf("%s+%s*original vector",
+          round(add_to_mean,digits = 4),round(multby_sd, digits=4))
+  
+  
+}
+```
+
+```{r}
+linear_transform_it(test,15,100)
+```
+```{r}
+mean(36.3742+1.793*test)
+sd(36.3742+1.793*test)
+
+test2 <- 36.3742+1.793*test
+
+```
+##B
+```{r}
+test2 <- 36.3742+1.793*test
+range(test)
+range(test2)
+
+36.3742+1.793*12.69608
+36.3742+1.793*49.92444
+```
+The new values range from a+bx1, where x is the smallest original value to a+bxn, where xn is the largest original value
+
+##C
+
+```{r}
+plot(x=test,y=test2, type='l',col='pink',xlab='x',ylab='y')
+text(x=test[20],y=test2[50],labels='a+bx',col='black')
+```
+
+
+#4.1  
+```{r}
+se_t <- sqrt(0.5*0.5/500)
+
+se_c <- sqrt(0.4*0.6/500)
+
+estimate <- 0.5-0.4
+
+se_estimate <- sqrt(se_t^2+se_c^2)
+
+estimate
+se_estimate
+```
+The estimated difference between the treatment and control group is 0.1, with a standard error of 0.03130
+
+#4.2
+
+If p is near 0.5 we can approximate standard error as 0.5/sqrt(n).
+
+sqrt(0.5/sqrt(n)^2 + 0.5/sqrt(n)^2) < 0.05
+
+this can be rearranged and solve for n
+
+
+```{r}
+
+n <- (2*0.5^2)/0.05^2
+
+n*2
+
+```
+at least 400 samples are needed
+
+#4.3
+
+```{r}
+
+se_w <- sqrt(0.3*0.7/20)
+
+se_b <- sqrt(0.4*0.6/20)
+
+estimate4_3 <- 0.4-0.3
+
+se_estimate4_3 <- sqrt(se_w^2+se_b^2)
+
+estimate4_3
+se_estimate4_3
+# calculate t score
+t_stats4_3 <- estimate4_3/se_estimate4_3
+t_stats4_3
+
+pt(t_stats4_3,19)
+
+```
+The probability is around 74%
+
+#4.4
+
+
+```{r}
+
+n2 <- 20
+
+while( 0.95 > pt((0.4-0.3)/sqrt((sqrt(0.3*0.7/n2))^2+(sqrt(0.4*0.6/n2))^2),n2-1))
+{
+
+
+n2 <- n2+1
+
+
+
+}
+
+print(n2)
+
+```
+with an N of 124 there is a 95% probability of distinguishing the shooters
+
+
+
